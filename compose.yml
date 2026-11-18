@@ -35,7 +35,7 @@ services:
       start_period: 10s
 
   app:
-    image: ${XIANYU_IMAGE:-ghcr.io/christ9038/ydisks-xianyu-helper:latest}
+    image: ${XIANYU_IMAGE:-ghcr.io/uskyu/ydisks-xianyu-helper:main}
     pull_policy: always
     restart: unless-stopped
     depends_on:
