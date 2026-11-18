@@ -65,6 +65,7 @@ describe('useAutomationAuditLog', /* 当前回调验证规则日志 Hook 的加�
   // 用例：加载失败展示错误，重试成功后清除错误；非 Error 失败使用兜底文案。
   test('加载失败展示错误，重试成功后清除错误', async () => {
     listMock.mockRejectedValueOnce(new Error('服务暂不可用')).mockResolvedValueOnce(pageOf('B'));
+    // result 是规则日志 Hook 的渲染结果，用于断言错误文案、重试后的数据和 loading 状态。
     const { result } = renderHook(/* hookFactory 创建规则日志 Hook。 */ () => useAutomationAuditLog(''));
     await waitFor(/* 等待失败状态。 */ () => expect(result.current.error).toBe('服务暂不可用'));
     expect(result.current.loading).toBe(false);
@@ -121,6 +122,7 @@ describe('useAutomationAuditLog', /* 当前回调验证规则日志 Hook 的加�
   // 用例：开启自动刷新后按间隔重新查询，关闭后停止。
   test('开启自动刷新后按间隔重新查询，关闭后停止', /* 当前回调断言自动刷新的开启与关闭。 */ async () => {
     listMock.mockResolvedValue(pageOf('T'));
+    // result 是规则日志 Hook 的渲染结果，用于切换自动刷新并读取其当前状态。
     const { result } = renderHook(/* hookFactory 创建规则日志 Hook。 */ () => useAutomationAuditLog(''));
     await waitFor(/* 等待首次加载。 */ () => expect(result.current.loading).toBe(false));
     vi.useFakeTimers();

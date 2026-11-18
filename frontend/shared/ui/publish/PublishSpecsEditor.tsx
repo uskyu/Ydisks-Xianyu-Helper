@@ -12,7 +12,7 @@ export interface PublishSpecsEditorProps {
   /** skuRows 是规格组合对应的价格和库存。 */
   skuRows: PublishSkuRow[];
   /** onChange 接收规格结构变化，并由父级保存表单与 SKU 行。 */
-  onChange: (next: { specs: PublishSpec[]; skuRows: PublishSkuRow[] }) => void;
+  onChange: (next: { /** specs 是变更后的完整规格维度列表，父级用它覆盖发布草稿。 */ specs: PublishSpec[]; skuRows: PublishSkuRow[] }) => void;
   /** renderValueImage 可选地替换规格值图片入口（例如从图片库选择）；缺省时使用本地文件上传。 */
   renderValueImage?: (value: PublishSpec['values'][number]) => ReactNode;
 }
