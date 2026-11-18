@@ -21,7 +21,7 @@ const collectSourceFiles = (directory: string): string[] => readdirSync(director
 const productionSources = (): Array<{ /* relativePath 表示relative当前路径。 */ relativePath: string; /* source 表示source。 */ source: string }> => collectSourceFiles(sourceRoot)
   .filter(filePath => !filePath.endsWith('.test.ts') && !filePath.endsWith('.test.tsx') /* filePath 为待排除测试文件的源码路径。 */)
   .map(filePath => ({
-    relativePath: relative(sourceRoot, filePath).split('/').join('/'),
+    relativePath: relative(sourceRoot, filePath).replace(/\\/g, '/'),
     source: readFileSync(filePath, 'utf8'),
   }) /* map 回调读取单个生产文件并保留稳定相对路径。 */);
 
@@ -48,7 +48,7 @@ const resolveImportPath = (sourcePath: string, specifier: string): string | null
   // absoluteImportPath 是依据当前源码文件目录解析出的无扩展名绝对路径。
   const absoluteImportPath = resolve(dirname(resolve(sourceRoot, sourcePath)), specifier);
   // normalizedPath 是相对于源码根目录的跨平台标准路径。
-  const normalizedPath = relative(sourceRoot, absoluteImportPath).split('/').join('/');
+  const normalizedPath = relative(sourceRoot, absoluteImportPath).replace(/\\/g, '/');
   return normalizedPath.startsWith('..') ? null : normalizedPath;
 };
 
