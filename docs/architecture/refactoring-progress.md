@@ -478,3 +478,11 @@ architecturecheck: 通过；git diff --check 无输出。
 - 门禁结果：`make api-check`、`go run ./tools/architecturecheck`、`make comments`、`git diff --check`、前端 typecheck、前端 405 项测试和生产构建全部通过；`make check` 与 `go test ./... -count=1` 全部通过，Server race 通过。
 - 覆盖率：`make cover` Go statements 66.2%；`make cover-frontend` V8 statements 80.2%、lines 82.43%。覆盖率文件和前端覆盖率目录均为生成产物，未纳入提交。
 - 浏览器与外部环境：冻结 CAPTCHA 普通单元测试随全量 Go 测试通过；本次未执行真实账号或外部平台调用，未修改冻结浏览器实现。浏览器真实集成和多数据库证据继续沿用本文件此前已记录的通过结果。
+
+### 2026-11-18 飞书扫码机器人、新消息通知与聊天深链
+
+- 飞书扫码绑定：新增 `internal/feishu` 官方设备码注册客户端（begin/poll、Lark 域名切换、HTTP 400 带内错误处理）、应用凭证加密写入通知渠道、租户令牌缓存与私聊文本发送；通知页支持扫码绑定与分类设置。
+- 新消息通知：新增 `chat_message_received` 事件，在买家消息首次落库后触发；支持 `XIANYU_PUBLIC_URL` 深链 `/app/chat?account=&chat=`，同一会话一秒防抖窗口内合并。
+- 分类开关：`feishu_app` 渠道支持警告类/普通提示类两个持久化开关，发送前按事件级别、失败结果和固定告警类型过滤；扫码弹窗与渠道设置面板按需加载，通知页 chunk 从 56.3 KiB 降至 28.3 KiB、保持在 45 KiB 预算内。
+- 数据兼容：新增 00064 迁移扩展 SQLite/PostgreSQL 通知渠道 type CHECK，MySQL 保持编号对齐；添加数据库级 `feishu_app` 渠道持久化测试。
+- 验收：`go build ./...`、`go vet ./...`、architecturecheck、commentlint、docscheck、核心 Go 包与 Server OpenAPI/Feishu 契约场景、前端 typecheck、`vitest --maxWorkers=2`（157 files / 947 tests）、`npm run comments:check`、生产构建与 bundleBoundary 均通过。扫码 begin/poll 已用真实飞书设备码接口验证到 waiting 阶段（未完成真实扫码授权）；新消息外发与飞书私聊发送仅由 httptest/单元测试覆盖，待用户在服务器扫码后验证。
