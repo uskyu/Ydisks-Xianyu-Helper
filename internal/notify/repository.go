@@ -34,6 +34,12 @@ type userScopedSettings interface {
 	GetSettingForUser(ctx context.Context, userID int64, key string) (string, error)
 }
 
+// unreadSummaryRepository 是通知器可选读取账号未读汇总的能力；未实现的轻量仓储只会省略通知末尾的未读数量。
+type unreadSummaryRepository interface {
+	// UnreadAccountSummaries 返回与指定账号同属一个用户的各账号当前未读汇总。
+	UnreadAccountSummaries(ctx context.Context, accountID string) ([]db.UnreadAccountSummary, error)
+}
+
 // storeRepository 将完整 Store 适配为通知器窄 repository。
 type storeRepository struct {
 	// store 保存数据库聚合入口，仅在适配器内部使用。
@@ -97,6 +103,14 @@ func (r storeRepository) GetSettingForUser(ctx context.Context, userID int64, ke
 		return r.store.ReadSensitiveSetting(ctx, userID, key, "settings.use", "notifications")
 	}
 	return r.store.Settings.Get(ctx, key)
+}
+
+// UnreadAccountSummaries 委托聊天仓储读取同用户各账号的未读汇总；仓储缺失时由通知器省略未读数量。
+func (r storeRepository) UnreadAccountSummaries(ctx context.Context, accountID string) ([]db.UnreadAccountSummary, error) {
+	if r.store == nil || r.store.Chats == nil {
+		return nil, errors.New("聊天仓储未初始化")
+	}
+	return r.store.Chats.UnreadAccountSummaries(ctx, accountID)
 }
 
 // newStoreRepository 从完整 Store 构造通知器使用的窄 repository。

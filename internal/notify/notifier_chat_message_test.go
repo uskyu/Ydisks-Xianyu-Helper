@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,7 +48,7 @@ func TestNotifyChatMessageQueuesIdempotentNotification(t *testing.T) {
 	if !strings.Contains(record.Body, "账号名称: 店铺A") || !strings.Contains(record.Body, "会话用户: 买家 (ID: buyer-1)") {
 		t.Fatalf("通知正文缺少账号或买家字段: %s", record.Body)
 	}
-	if !strings.Contains(record.Body, "消息类型: 文本") || !strings.Contains(record.Body, "消息摘要: "+strings.Repeat("长", 160)+"…") {
+	if !strings.Contains(record.Body, "消息类型: 文本") || !strings.Contains(record.Body, "消息摘要: （"+strings.Repeat("长", 160)+"…）") {
 		t.Fatalf("通知正文缺少类型或截断摘要: %s", record.Body)
 	}
 	if !strings.Contains(record.Body, "查看链接: "+wantLink) {
@@ -181,5 +182,118 @@ func TestNewWithOptionsChatMessageNotificationOmitsCredentials(t *testing.T) {
 	}
 	if strings.Contains(payload.Message, "tk_1") || strings.Contains(payload.Message, "unb=123") {
 		t.Fatalf("通知正文不得包含账号 Cookie: %s", payload.Message)
+	}
+}
+
+// unreadQueueRepository 在捕获 outbox 的测试仓储上补充未读汇总能力。
+type unreadQueueRepository struct {
+	*queueRepository
+	// summaries 是未读汇总查询返回的账号明细。
+	summaries []db.UnreadAccountSummary
+	// summaryErr 是未读汇总查询返回的错误；非空时验证通知降级路径。
+	summaryErr error
+}
+
+// UnreadAccountSummaries 返回预置的未读汇总或错误，不访问数据库。
+func (r *unreadQueueRepository) UnreadAccountSummaries(ctx context.Context, accountID string) ([]db.UnreadAccountSummary, error) {
+	// ctx 与 accountID 只保持接口签名一致，测试替身不参与真实查询。
+	_ = ctx
+	_ = accountID
+	return r.summaries, r.summaryErr
+}
+
+// TestFormatChatUnreadSummary 验证未读汇总括号的合计、多账号明细、名称回退和无效计数过滤。
+func TestFormatChatUnreadSummary(t *testing.T) {
+	// cases 保存未读汇总输入及期望括号文本的确定性样例。
+	cases := []struct {
+		// name 是本条样例的说明。
+		name string
+		// summaries 是待格式化的账号未读汇总。
+		summaries []db.UnreadAccountSummary
+		// want 是期望生成的括号内容；空串表示不追加任何内容。
+		want string
+	}{
+		{name: "无数据", summaries: nil, want: ""},
+		{name: "全部为零或负数", summaries: []db.UnreadAccountSummary{{AccountID: "a", AccountName: "店铺A", UnreadCount: 0}, {AccountID: "b", AccountName: "店铺B", UnreadCount: -1}}, want: ""},
+		{name: "单账号只显示总数", summaries: []db.UnreadAccountSummary{{AccountID: "a", AccountName: "店铺A", UnreadCount: 3}}, want: "（当前未读 3 条）"},
+		{name: "多账号显示合计与明细", summaries: []db.UnreadAccountSummary{{AccountID: "a", AccountName: "店铺A", UnreadCount: 3}, {AccountID: "b", AccountName: "店铺B", UnreadCount: 2}}, want: "（当前未读共 5 条：店铺A 3 条、店铺B 2 条）"},
+		{name: "名称回退并压缩空白", summaries: []db.UnreadAccountSummary{{AccountID: "acc-1", AccountName: "", UnreadCount: 2}, {AccountID: "acc-2", AccountName: " 店铺\nB ", UnreadCount: 1}}, want: "（当前未读共 3 条：acc-1 2 条、店铺 B 1 条）"},
+		{name: "忽略无效计数后按单账号展示", summaries: []db.UnreadAccountSummary{{AccountID: "a", AccountName: "店铺A", UnreadCount: 2}, {AccountID: "b", AccountName: "店铺B", UnreadCount: 0}}, want: "（当前未读 2 条）"},
+	}
+	// tc 表示当前待验证的未读汇总样例。
+	for _, tc := range cases {
+		// got 保存被测函数生成的括号内容。
+		if got := formatChatUnreadSummary(tc.summaries); got != tc.want {
+			t.Fatalf("case=%s got=%q want=%q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// TestNotifyChatMessageIncludesUnreadSummary 验证新消息通知末尾追加同用户账号未读合计与明细。
+func TestNotifyChatMessageIncludesUnreadSummary(t *testing.T) {
+	// repository 在捕获 outbox 的测试仓储上补充两个账号的未读汇总。
+	repository := &unreadQueueRepository{
+		queueRepository: &queueRepository{scriptedOutboxRepository: &scriptedOutboxRepository{}, channels: []db.NotificationChannel{{ID: 1, Type: "webhook"}}},
+		summaries: []db.UnreadAccountSummary{
+			{AccountID: "acc", AccountName: "店铺A", UnreadCount: 3},
+			{AccountID: "acc-2", AccountName: "店铺B", UnreadCount: 2},
+		},
+	}
+	// notifier 使用捕获 outbox 的测试仓储，不访问网络。
+	notifier := newNotifier("acc", repository, nilLogger(), Options{})
+	notifier.NotifyChatMessage(context.Background(), "acc", "店铺A", "chat-1", "买家", "buyer", "item", "text", "量芯云的", "m-summary")
+	if len(repository.enqueued) != 1 {
+		t.Fatalf("新消息通知应入队一条记录，实际 %+v", repository.enqueued)
+	}
+	// body 保存格式化后的通知正文。
+	body := repository.enqueued[0].Body
+	if !strings.Contains(body, "消息摘要: （量芯云的）") {
+		t.Fatalf("文本摘要应使用中文括号包裹: %s", body)
+	}
+	if !strings.Contains(body, "（当前未读共 5 条：店铺A 3 条、店铺B 2 条）") {
+		t.Fatalf("通知末尾缺少未读汇总: %s", body)
+	}
+}
+
+// TestNotifyChatMessageUsesSingleAccountUnreadTotal 验证只有一个账号有未读时只显示合计，不展开账号明细。
+func TestNotifyChatMessageUsesSingleAccountUnreadTotal(t *testing.T) {
+	// repository 只返回当前账号的未读汇总。
+	repository := &unreadQueueRepository{
+		queueRepository: &queueRepository{scriptedOutboxRepository: &scriptedOutboxRepository{}, channels: []db.NotificationChannel{{ID: 1, Type: "webhook"}}},
+		summaries:       []db.UnreadAccountSummary{{AccountID: "acc", AccountName: "店铺A", UnreadCount: 2}},
+	}
+	// notifier 使用捕获 outbox 的测试仓储，不访问网络。
+	notifier := newNotifier("acc", repository, nilLogger(), Options{})
+	notifier.NotifyChatMessage(context.Background(), "acc", "店铺A", "chat-1", "买家", "buyer", "item", "text", "你好", "m-single")
+	if len(repository.enqueued) != 1 {
+		t.Fatalf("新消息通知应入队一条记录，实际 %+v", repository.enqueued)
+	}
+	// body 保存格式化后的通知正文。
+	body := repository.enqueued[0].Body
+	if !strings.Contains(body, "（当前未读 2 条）") || strings.Contains(body, "店铺A 2 条") {
+		t.Fatalf("单账号未读只应显示合计: %s", body)
+	}
+}
+
+// TestNotifyChatMessageOmitsUnreadSummaryOnQueryFailure 验证未读汇总查询失败时仍发送原通知且不追加未读括号。
+func TestNotifyChatMessageOmitsUnreadSummaryOnQueryFailure(t *testing.T) {
+	// repository 模拟未读汇总查询失败，但 outbox 入队保持可用。
+	repository := &unreadQueueRepository{
+		queueRepository: &queueRepository{scriptedOutboxRepository: &scriptedOutboxRepository{}, channels: []db.NotificationChannel{{ID: 1, Type: "webhook"}}},
+		summaryErr:      errors.New("未读汇总查询失败"),
+	}
+	// notifier 使用失败仓储验证通知降级路径。
+	notifier := newNotifier("acc", repository, nilLogger(), Options{})
+	notifier.NotifyChatMessage(context.Background(), "acc", "店铺A", "chat-1", "买家", "buyer", "item", "text", "你好", "m-fail")
+	if len(repository.enqueued) != 1 {
+		t.Fatalf("查询失败不应阻止通知入队，实际 %+v", repository.enqueued)
+	}
+	// body 保存降级后的通知正文。
+	body := repository.enqueued[0].Body
+	if strings.Contains(body, "当前未读") {
+		t.Fatalf("查询失败不应追加未读汇总: %s", body)
+	}
+	if !strings.Contains(body, "有新消息，请打开管理后台查看。") || !strings.Contains(body, "消息摘要: （你好）") {
+		t.Fatalf("降级通知缺少固定提示或括号摘要: %s", body)
 	}
 }

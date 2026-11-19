@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -84,4 +85,65 @@ func (s *ChatStore) MarkLatestOutgoingRead(ctx context.Context, cookieID, chatID
 		return nil, err
 	}
 	return s.MarkMessageRead(ctx, cookieID, key, readAt)
+}
+
+// UnreadAccountSummary 是账号维度未读汇总的单条展示数据；只包含非敏感名称和计数，不携带凭证或消息正文。
+type UnreadAccountSummary struct {
+	// AccountID 是账号主键，用于稳定排序和展示名称回退。
+	AccountID string
+	// AccountName 是用户备注、平台昵称或账号主键依次回退后的可展示名称。
+	AccountName string
+	// UnreadCount 是该账号所有可见会话当前累计的入站用户未读消息数。
+	UnreadCount int
+}
+
+// UnreadAccountSummaries 返回与 accountID 同属一个用户的所有账号未读汇总。
+// 查询只读取 cookies 的 id、remark、nickname 和 chat_sessions.unread_count，不读取、不解密 Cookie、Token 或消息内容。
+// 结果只包含未读数大于零的账号，并按未读数降序、账号主键升序排列，便于通知稳定展示。
+func (s *ChatStore) UnreadAccountSummaries(ctx context.Context, accountID string) ([]UnreadAccountSummary, error) {
+	if s == nil || s.DB == nil {
+		return nil, errors.New("聊天存储未初始化")
+	}
+	// accountKey 是去除首尾空白后的账号标识；空值无法定位归属用户，直接返回空汇总。
+	accountKey := strings.TrimSpace(accountID)
+	if accountKey == "" {
+		return nil, nil
+	}
+	// rows、err 保存归属用户全部账号的未读聚合查询结果及数据库错误。
+	rows, err := s.DB.QueryContext(ctx, `SELECT c.id, COALESCE(c.remark,''), COALESCE(c.nickname,''), COALESCE(SUM(s.unread_count),0)
+		FROM cookies c JOIN chat_sessions s ON s.cookie_id=c.id
+		WHERE c.user_id=(SELECT user_id FROM cookies WHERE id=?)
+		GROUP BY c.id,c.remark,c.nickname
+		HAVING SUM(s.unread_count)>0
+		ORDER BY COALESCE(SUM(s.unread_count),0) DESC, c.id ASC`, accountKey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	// summaries 保存按数据库排序返回的非敏感未读汇总，容量按常见少量账号预估。
+	summaries := make([]UnreadAccountSummary, 0, 4)
+	for rows.Next() {
+		// id、remark、nickname 分别是账号主键、用户备注和平台昵称缓存。
+		var id, remark, nickname string
+		// count 是该账号所有会话累计的未读消息数。
+		var count int
+		// scanErr 保存当前汇总行扫描失败的原因。
+		if scanErr := rows.Scan(&id, &remark, &nickname, &count); scanErr != nil {
+			return nil, scanErr
+		}
+		// displayName 按备注、昵称、账号 ID 的顺序回退，语义与通知器单账号展示保持一致。
+		displayName := strings.TrimSpace(remark)
+		if displayName == "" {
+			displayName = strings.TrimSpace(nickname)
+		}
+		if displayName == "" {
+			displayName = id
+		}
+		summaries = append(summaries, UnreadAccountSummary{AccountID: id, AccountName: displayName, UnreadCount: count})
+	}
+	// iterationErr 保存游标遍历结束时的数据库错误，避免静默返回不完整汇总。
+	if iterationErr := rows.Err(); iterationErr != nil {
+		return nil, iterationErr
+	}
+	return summaries, nil
 }

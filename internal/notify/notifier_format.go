@@ -1,8 +1,11 @@
 package notify
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
+
+	"xianyu-go/internal/db"
 )
 
 // levelLabel 封装levelLabel业务协调。
@@ -237,6 +240,49 @@ func chatMessagePreview(messageType, preview string) string {
 		return "[新消息]"
 	}
 	return truncateRunes(text, 160)
+}
+
+// chatMessageSummaryLabel 给文本摘要两侧加中文括号，媒体与空消息已有的方括号占位保持不变。
+func chatMessageSummaryLabel(messageType, preview string) string {
+	// summary 是已经归一化并截断后的消息摘要。
+	summary := chatMessagePreview(messageType, preview)
+	if strings.HasPrefix(summary, "[") {
+		return summary
+	}
+	return "（" + summary + "）"
+}
+
+// formatChatUnreadSummary 生成通知末尾的未读汇总括号。
+// 只统计正数未读；单账号只显示总数，多账号同时显示总数和按未读数排序的账号明细；没有有效数据时返回空串。
+// summaries 的元素顺序由仓储保证（未读数降序、账号主键升序），函数本身不重新排序，便于稳定测试。
+func formatChatUnreadSummary(summaries []db.UnreadAccountSummary) string {
+	// total 是所有有效账号未读消息的合计。
+	total := 0
+	// parts 保存“账号名称 N 条”形式的明细，用于多账号括号内容。
+	parts := make([]string, 0, len(summaries))
+	// summary 是当前待处理的单账号未读汇总。
+	for _, summary := range summaries {
+		if summary.UnreadCount <= 0 {
+			continue
+		}
+		// name 是去除全部空白字符后的账号展示名称；换行等控制字符会破坏通知分行，因此压缩为单个空格。
+		name := strings.Join(strings.Fields(strings.TrimSpace(summary.AccountName)), " ")
+		if name == "" {
+			name = strings.Join(strings.Fields(strings.TrimSpace(summary.AccountID)), " ")
+		}
+		if name == "" {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %d 条", name, summary.UnreadCount))
+		total += summary.UnreadCount
+	}
+	if total <= 0 {
+		return ""
+	}
+	if len(parts) == 1 {
+		return fmt.Sprintf("（当前未读 %d 条）", total)
+	}
+	return fmt.Sprintf("（当前未读共 %d 条：%s）", total, strings.Join(parts, "、"))
 }
 
 // truncateRunes 按 Unicode 字符而不是字节截断文本，避免中文或表情被截成非法 UTF-8；超长时追加省略号。

@@ -205,10 +205,17 @@ func (n *Notifier) NotifyChatMessage(ctx context.Context, accountID, accountName
 		"会话用户": chatPeerLabel(peerName, peerID),
 		"商品ID": strings.TrimSpace(itemID),
 		"消息类型": chatMessageTypeLabel(messageType),
-		"消息摘要": chatMessagePreview(messageType, preview),
+		"消息摘要": chatMessageSummaryLabel(messageType, preview),
 	}
 	if n != nil && n.publicBaseURL != "" {
 		fields["查看链接"] = n.chatMessageURL(accountID, chatID)
+	}
+	// body 保存固定查看提示；成功读取未读汇总时追加括号内容，读取失败不影响通知本身。
+	body := "有新消息，请打开管理后台查看。"
+	// unreadLine 是可选追加的未读汇总括号；空值表示仓储不支持、查询失败或没有有效未读。
+	unreadLine := n.chatUnreadSummary(ctx, accountID)
+	if unreadLine != "" {
+		body += "\n\n" + unreadLine
 	}
 	// idempotencyKey 只绑定真实平台消息键；缺失时保持空值，由调用方接受普通去重语义。
 	idempotencyKey := ""
@@ -221,9 +228,31 @@ func (n *Notifier) NotifyChatMessage(ctx context.Context, accountID, accountName
 		Type:      EventChatMessageReceived,
 		Level:     "info",
 		Title:     "收到买家消息",
-		Body:      "有新消息，请打开管理后台查看。",
+		Body:      body,
 		Fields:    fields,
 	}, idempotencyKey)
+}
+
+// chatUnreadSummary 读取同一用户各账号的未读汇总并生成通知末尾括号。
+// 仓储不支持可选能力、查询失败或没有有效未读时返回空串，保证旧通知格式和投递行为不变。
+func (n *Notifier) chatUnreadSummary(ctx context.Context, accountID string) string {
+	if n == nil || n.repository == nil || ctx == nil {
+		return ""
+	}
+	// repository 表示实现可选未读汇总能力的具体仓储；未实现时保持旧通知格式。
+	repository, ok := n.repository.(unreadSummaryRepository)
+	if !ok {
+		return ""
+	}
+	// summaries、err 保存同用户账号未读汇总及查询失败原因；失败只省略附加信息。
+	summaries, err := repository.UnreadAccountSummaries(ctx, accountID)
+	if err != nil {
+		if n.logger != nil {
+			n.logger.Warn("读取未读消息汇总失败，通知省略未读数量", "account", accountID, "err", logsafe.Error(err))
+		}
+		return ""
+	}
+	return formatChatUnreadSummary(summaries)
 }
 
 // NotifyAutomationRun 将一个自动化运行的终态通知持久化到 outbox。
