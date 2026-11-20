@@ -51,6 +51,8 @@ export interface OrderActionsState {
   shipLoading: boolean;
   // shipResult 保存最近一次发货操作结果。
   shipResult: OrderShipResult | null;
+  // syncing 表示当前筛选条件下是否正在等待批量订单同步任务完成。
+  syncing: boolean;
   // syncingOrderId 保存当前正在单笔同步的订单号。
   syncingOrderId: string | null;
   // deletingOrderId 保存当前正在删除的订单号。
@@ -102,6 +104,8 @@ export const useOrderActions = ({ orders, page, accountFilter, filter, searchTex
   const [shipLoading, setShipLoading] = useState(false);
   // shipResult 保存最近一次发货操作结果。
   const [shipResult, setShipResult] = useState<OrderShipResult | null>(null);
+  // syncing 表示当前筛选条件下是否正在等待批量订单同步任务完成；只控制按钮反馈，不改变后台任务。
+  const [syncing, setSyncing] = useState(false);
   // syncingOrderId 保存当前正在单笔同步的订单号。
   const [syncingOrderId, setSyncingOrderId] = useState<string | null>(null);
   // deletingOrderId 保存当前正在删除的订单号。
@@ -132,14 +136,20 @@ export const useOrderActions = ({ orders, page, accountFilter, filter, searchTex
   }, [accountFilter, filter, page, searchText]);
 
   // 筛选切换或卸载时使旧同步代次失效；后台任务继续执行，其晚到结果不能刷新旧列表或提示用户。
-  useEffect(/* 同步结果归属于当前账号与状态筛选，cleanup 结束该筛选上下文的所有旧代次。 */ () => {
-    return () => { syncGeneration.current += 1; }; // 清理当前筛选上下文，不创建新的后台同步任务。
+  useEffect(/* 同步结果归属于当前账号与状态筛选，cleanup 结束该筛选上下文的所有旧代次并复位按钮忙碌态。 */ () => {
+    return () => {
+      syncGeneration.current += 1;
+      // 新筛选上下文没有在途批量任务；旧任务的 finally 会因代次失效跳过复位，因此必须在此清除。
+      setSyncing(false);
+    }; // 清理当前筛选上下文，不创建新的后台同步任务。
   }, [accountFilter, filter]);
 
   // handleSync 同步当前筛选条件下的订单并刷新列表。
   const handleSync = useCallback(/* syncAction 执行当前筛选条件下的订单同步。 */ async () => {
 		// generation 是本次批量同步的代次；仅仍为最新代次的结果允许更新界面。
 		const generation = ++syncGeneration.current;
+    // 用户点击后立即进入忙碌态，让固定 MTOP 节拍和任务轮询期间的等待有明确反馈。
+    setSyncing(true);
     try {
       // result 保存订单同步接口返回的结果说明。
       const result = await syncOrders(accountFilter || undefined, filter);
@@ -160,6 +170,9 @@ export const useOrderActions = ({ orders, page, accountFilter, filter, searchTex
       }
       console.error('同步订单失败:', error);
       alert(orderErrorMessage(error, '同步失败，请重试'));
+    } finally {
+      // 只有当前代次可以复位按钮；更新的同步或筛选切换拥有自己的忙碌状态。
+      if (mounted.current && generation === syncGeneration.current) setSyncing(false);
     }
   }, [accountFilter, filter, loadOrders]);
 
@@ -306,6 +319,7 @@ export const useOrderActions = ({ orders, page, accountFilter, filter, searchTex
     shipOrderId,
     shipLoading,
     shipResult,
+    syncing,
     syncingOrderId,
     deletingOrderId,
     handleSync,

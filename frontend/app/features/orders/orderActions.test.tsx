@@ -82,6 +82,25 @@ describe('useOrderActions 订单动作协调器', /* 当前回调验证订单动
     expect(hook.result.current.syncingOrderId).toBeNull();
   });
 
+  test('批量同步期间按钮忙碌态保持到任务完成', /* 当前回调验证固定 MTOP 节拍等待期间有明确的按钮反馈。 */ async () => {
+    // resolveSync 保存尚未返回的批量同步完成器。
+    let resolveSync!: (value: OrderRefreshResponse) => void;
+    // pendingSync 是模拟平台同步尚未完成的 Promise。
+    const pendingSync = new Promise<OrderRefreshResponse>(/* resolve 参数把完成器交给测试。 */ resolve => { resolveSync = resolve; });
+    orderActionMocks.syncOrders.mockImplementationOnce(/* syncImplementation 返回可控的待完成同步。 */ () => pendingSync);
+    // hook 保存订单动作 Hook 的渲染结果。
+    const { hook } = createActionHook();
+    // task 保存当前批量同步 Promise，供完成前检查忙碌态。
+    let task!: Promise<void>;
+    act(/* startAction 启动批量同步但不等待完成。 */ () => { task = hook.result.current.handleSync(); });
+    expect(hook.result.current.syncing).toBe(true);
+    await act(/* finishAction 完成同步并等待按钮复位。 */ async () => {
+      resolveSync({ partial_failure: false, message: '同步完成', summary: { restored: 0, reassigned: 0, discovered: 0, list_updated: 0, soft_deleted: 0, detail_total: 0, total: 0, updated: 0, no_change: 0, failed: 0 }, results: [] });
+      await task;
+    });
+    expect(hook.result.current.syncing).toBe(false);
+  });
+
   test('同步仍在后台运行时刷新已入库订单并提示而不是报失败', /* 当前回调验证前端等待预算耗尽但任务继续运行的分支。 */ async () => {
     orderActionMocks.syncOrders.mockRejectedValueOnce(new OrderRefreshStillRunningError('job-running'));
     // hook、loadOrders 保存订单动作协调器及其列表刷新替身。

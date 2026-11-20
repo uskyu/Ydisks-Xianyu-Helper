@@ -43,7 +43,8 @@ export const OrderFilterBar: React.FC<OrderFilterBarProps> = ({
 
   return (
     <div className="p-4 border-b border-gray-50 flex flex-col md:flex-row gap-4 justify-between items-center bg-surface-muted">
-      <div className="flex gap-1 p-1 bg-gray-200/50 rounded-xl overflow-x-auto max-w-full">
+      {/* 七个状态标签按可用宽度换行，避免手机横向滚动藏住筛选；宽屏空间足够时自然保持单行。 */}
+      <div className="flex w-full min-w-0 max-w-full flex-wrap gap-1 rounded-xl bg-gray-200/50 p-1 md:w-auto">
         {orderStatusOptions.map(
           // option 是当前订单状态筛选标签配置。
           option => (
@@ -51,21 +52,21 @@ export const OrderFilterBar: React.FC<OrderFilterBarProps> = ({
               key={option.key}
               data-status={option.key}
               onClick={handleStatusClick}
-              className={`px-5 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${filter === option.key ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              className={`px-3 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap sm:px-4 ${filter === option.key ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
             >
               {option.label}
             </button>
           ),
         )}
       </div>
-      <div className="flex w-full md:w-auto flex-col sm:flex-row gap-3">
+      <div className="flex w-full md:w-auto flex-col md:flex-row gap-3">
         <div className="relative">
           <UserIcon className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <select
             aria-label="按账号筛选订单"
             value={accountFilter}
             onChange={handleAccountChange}
-            className="ios-input pl-10 pr-9 py-2.5 rounded-xl w-full sm:w-56 bg-white border-none shadow-sm"
+            className="ios-input pl-10 pr-9 py-2.5 rounded-xl w-full md:w-56 bg-white border-none shadow-sm"
           >
             <option value="">全部账号</option>
             {accounts.map(
@@ -74,14 +75,14 @@ export const OrderFilterBar: React.FC<OrderFilterBarProps> = ({
             )}
           </select>
         </div>
-        <div className="relative group">
+        <div className="relative group w-full md:w-auto">
           <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-brand transition-colors" />
           <input
             type="text"
             placeholder="搜索订单号/商品/买家..."
             value={searchText}
             onChange={handleSearchChange}
-            className="ios-input pl-10 pr-4 py-2.5 rounded-xl w-64 bg-white border-none shadow-sm focus:ring-0"
+            className="ios-input pl-10 pr-4 py-2.5 rounded-xl w-full md:w-64 bg-white border-none shadow-sm focus:ring-0"
           />
         </div>
       </div>
