@@ -1,4 +1,4 @@
-import type { FeishuAppBindingStartResult,FeishuAppBindingStatusResult,FeishuChannelCategories,MutationIDResponse,NotificationBinding,NotificationChannel,NotificationChannelEditorResponse,NotificationChannelResponse,NotificationEventType,OperationResponse,SystemSettings } from './models';
+import type { FeishuAppBindingStartResult,FeishuAppBindingStatusResult,FeishuChannelCategories,MutationIDResponse,NotificationAccountOption,NotificationBinding,NotificationChannel,NotificationChannelEditorResponse,NotificationChannelResponse,NotificationEventType,OperationResponse,SystemSettings } from './models';
 import { normalizeSystemSettingsUpdate } from '../../../shared/api-contract/settings';
 import { type RequestControlOptions } from '../../../shared/http/client';
 import { contractClient, runContractRequest } from '../../../shared/api-contract/client';
@@ -164,6 +164,19 @@ export const updateFeishuChannelCategories = async (channelID: string, categorie
     options,
   );
 };
+
+/** 读取当前用户全部账号的选项（标识+展示名），供渠道弹窗勾选绑定账号。 */
+export const getNotificationAccountOptions = async (options?: RequestControlOptions): Promise<NotificationAccountOption[]> => {
+  // response 是账号摘要列表响应，兼容后端以数组或带 data 包裹返回。
+  const response = await runContractRequest(/* signal 控制账号选项读取的取消和超时。 */ signal => contractClient.GET('/api/v1/accounts/details', { signal }), options) as unknown;
+  // items 是账号摘要数组；非数组响应按空列表处理。
+  const items = (Array.isArray(response) ? response : (response as { /** data 是历史包裹字段。 */ data?: unknown } | null)?.data) as Array<{ /** id 是账号标识。 */ id: string; /** nickname 是平台昵称。 */ nickname?: string; /** remark 是用户备注。 */ remark?: string }> | undefined;
+  if (!Array.isArray(items)) return [];
+  return items.map(/* item 转换为仅含标识与展示名的选项。 */ item => ({ id: String(item.id), label: item.remark || item.nickname || `账号 ${String(item.id).substring(0, 6)}` }));
+};
+
+/** 整体替换指定渠道绑定的账号集合；与账号管理编辑页的「通知渠道绑定」读写同一份数据，空数组表示全部解绑。 */
+export const setChannelAccounts = async (channelID: string, accountIDs: string[], options?: RequestControlOptions): Promise<OperationResponse> => runContractRequest(/* signal 控制渠道账号绑定覆盖请求的取消和超时。 */ signal => contractClient.PUT('/api/v1/notifications/channels/{channel_id}/accounts', { params: { path: { channel_id: Number(channelID) } }, body: { account_ids: accountIDs }, signal }), options);
 
 /** 将系统配置响应转换为通知 SMTP 表单使用的状态模型。 */
 const normalizeSystemSettings = (settings: Record<string, unknown>): SystemSettings => {

@@ -27,7 +27,7 @@ The “向 AI 提供买家订单阶段” (provide the buyer's order stage to AI
 4. Save and click Test on the channel row. Confirm delivery in the target channel.
 5. Return to Account Management → Edit and bind the channel to each account. Creating a channel alone does not make an account use it.
 
-The notifications page also supports **扫码绑定飞书机器人**: scan with Feishu to create the app channel automatically. During binding you can enable or disable 警告类通知 (warnings) and 普通提示类通知 (regular notices); the same switches remain editable from the channel row after binding. A channel with both switches off sends nothing.
+The notifications page also supports **扫码绑定飞书机器人**: scan with Feishu to create the app channel automatically. During binding you can enable or disable 警告类通知 (warnings) and 普通提示类通知 (regular notices); the same switches remain editable from the channel row after binding. A channel with both switches off sends nothing. The channel-row settings dialog also lists every account with a checkbox, so newly added accounts can be bound without leaving the notifications page; the selection is the same data as Account Management → Edit → notification channel binding.
 
 A test notification verifies only channel configuration. Automated task notifications additionally require the account binding and the corresponding automation event filter. Automation results send when a task reaches completed, failed, or manual-review status (manual review sends a "manual handling required" notification, which channels subscribed only to the matching automation category also receive).
 

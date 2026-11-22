@@ -9,7 +9,7 @@ describe('FeishuNotificationSettingsModal', /* 当前测试组验证分类设置
   });
 
   test('读取中展示加载状态并隐藏保存按钮', /* 当前回调验证加载期间不会提交不可信草稿。 */ () => {
-    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading saving={false} warning info error="" loadFailed={false} onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={vi.fn()} onClose={vi.fn()} />);
+    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading saving={false} warning info error="" loadFailed={false} accountOptions={[]} selectedAccountIDs={[]} accountsStatus="ready" accountsError="" onToggleAccount={vi.fn()} onRetryAccounts={vi.fn()} onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByText('正在读取通知设置...')).not.toBeNull();
     expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.queryByRole('button', { name: /保存/ })).toBeNull();
@@ -22,7 +22,7 @@ describe('FeishuNotificationSettingsModal', /* 当前测试组验证分类设置
     const onInfoChange = vi.fn();
     // onSave 记录保存动作。
     const onSave = vi.fn();
-    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info={false} error="" loadFailed={false} onWarningChange={onWarningChange} onInfoChange={onInfoChange} onSave={onSave} onRetry={vi.fn()} onClose={vi.fn()} />);
+    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info={false} error="" loadFailed={false} accountOptions={[]} selectedAccountIDs={[]} accountsStatus="ready" accountsError="" onToggleAccount={vi.fn()} onRetryAccounts={vi.fn()} onWarningChange={onWarningChange} onInfoChange={onInfoChange} onSave={onSave} onRetry={vi.fn()} onClose={vi.fn()} />);
     expect((screen.getByRole('switch', { name: '警告类通知' }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('true');
     expect((screen.getByRole('switch', { name: '普通提示类通知' }) as HTMLButtonElement).getAttribute('aria-checked')).toBe('false');
     fireEvent.click(screen.getByRole('switch', { name: '警告类通知' }));
@@ -36,7 +36,7 @@ describe('FeishuNotificationSettingsModal', /* 当前测试组验证分类设置
   test('读取失败展示错误与重试并隐藏开关和保存', /* 当前回调验证默认草稿不会在读取失败后继续展示。 */ () => {
     // onRetry 是重新读取动作替身。
     const onRetry = vi.fn();
-    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info error="读取设置失败" loadFailed onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={onRetry} onClose={vi.fn()} />);
+    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info error="读取设置失败" loadFailed accountOptions={[]} selectedAccountIDs={[]} accountsStatus="ready" accountsError="" onToggleAccount={vi.fn()} onRetryAccounts={vi.fn()} onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={onRetry} onClose={vi.fn()} />);
     expect(screen.getByRole('alert').textContent).toContain('读取设置失败');
     expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.queryByRole('button', { name: /保存/ })).toBeNull();
@@ -45,9 +45,19 @@ describe('FeishuNotificationSettingsModal', /* 当前测试组验证分类设置
   });
 
   test('保存失败展示错误但保留开关和保存按钮', /* 当前回调验证保存失败后用户可以修改或重试。 */ () => {
-    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info error="保存设置失败" loadFailed={false} onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={vi.fn()} onClose={vi.fn()} />);
+    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info error="保存设置失败" loadFailed={false} accountOptions={[]} selectedAccountIDs={[]} accountsStatus="ready" accountsError="" onToggleAccount={vi.fn()} onRetryAccounts={vi.fn()} onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={vi.fn()} onClose={vi.fn()} />);
     expect(screen.getByRole('alert').textContent).toContain('保存设置失败');
     expect(screen.getByRole('switch', { name: '警告类通知' })).not.toBeNull();
     expect(screen.getByRole('button', { name: /保存/ })).not.toBeNull();
+  });
+
+  test('展示账号绑定勾选并回传切换动作', /* 当前回调验证新账号可见且可单独勾选绑定。 */ () => {
+    // onToggleAccount 是账号绑定切换动作替身。
+    const onToggleAccount = vi.fn();
+    render(<FeishuNotificationSettingsModal open channelName="飞书扫码渠道" loading={false} saving={false} warning info error="" loadFailed={false} accountOptions={[{ id: 'acc-1', label: '账号一' }, { id: 'acc-2', label: '账号二' }]} selectedAccountIDs={['acc-1']} accountsStatus="ready" accountsError="" onToggleAccount={onToggleAccount} onRetryAccounts={vi.fn()} onWarningChange={vi.fn()} onInfoChange={vi.fn()} onSave={vi.fn()} onRetry={vi.fn()} onClose={vi.fn()} />);
+    expect((screen.getByRole('checkbox', { name: /账号一/ }) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByRole('checkbox', { name: /账号二/ }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('checkbox', { name: /账号二/ }));
+    expect(onToggleAccount).toHaveBeenCalledWith('acc-2');
   });
 });

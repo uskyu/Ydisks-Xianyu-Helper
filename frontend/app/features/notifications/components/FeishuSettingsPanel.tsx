@@ -32,5 +32,5 @@ export const FeishuSettingsPanel: React.FC<FeishuSettingsPanelProps> = ({ channe
     onClose();
   };
 
-  return <FeishuNotificationSettingsModal open channelName={feishuSettings.channelName || channel.name} loading={feishuSettings.loading} saving={feishuSettings.saving} warning={feishuSettings.warning} info={feishuSettings.info} error={feishuSettings.error} loadFailed={feishuSettings.loadFailed} onWarningChange={feishuSettings.setWarning} onInfoChange={feishuSettings.setInfo} onSave={feishuSettings.save} onRetry={feishuSettings.reload} onClose={handleClose} />;
+  return <FeishuNotificationSettingsModal open channelName={feishuSettings.channelName || channel.name} loading={feishuSettings.loading} saving={feishuSettings.saving} warning={feishuSettings.warning} info={feishuSettings.info} error={feishuSettings.error} loadFailed={feishuSettings.loadFailed} accountOptions={feishuSettings.accountOptions} selectedAccountIDs={feishuSettings.selectedAccountIDs} accountsStatus={feishuSettings.accountsStatus} accountsError={feishuSettings.accountsError} onToggleAccount={feishuSettings.toggleAccount} onRetryAccounts={feishuSettings.reloadAccounts} onWarningChange={feishuSettings.setWarning} onInfoChange={feishuSettings.setInfo} onSave={feishuSettings.save} onRetry={feishuSettings.reload} onClose={handleClose} />;
 };

@@ -1632,6 +1632,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/channels/{channel_id}/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 整体替换通知渠道绑定的账号集合 */
+        put: operations["putApiV1NotificationsChannelsAccounts"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/messages": {
         parameters: {
             query?: never;
@@ -3336,6 +3353,9 @@ export interface components {
             channel_ids?: number[];
             channel_id?: number;
             enabled?: boolean;
+        };
+        NotificationChannelAccountsUpdateRequest: {
+            account_ids: string[];
         };
         NotificationBinding: {
             id: number;
@@ -12885,6 +12905,68 @@ export interface operations {
             };
             /** @description 统一错误响应 */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    putApiV1NotificationsChannelsAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationChannelAccountsUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description 成功 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 统一错误响应 */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

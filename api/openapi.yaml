@@ -5995,6 +5995,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  "/api/v1/notifications/channels/{channel_id}/accounts":
+    put:
+      operationId: putApiV1NotificationsChannelsAccounts
+      summary: 整体替换通知渠道绑定的账号集合
+      security: [{cookieAuth: []}]
+      parameters:
+        - name: channel_id
+          in: path
+          required: true
+          schema: {type: integer}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationChannelAccountsUpdateRequest'
+      responses:
+        '200':
+          description: 成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 统一错误响应
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   "/api/v1/notifications/messages":
     get:
       operationId: getApiV1NotificationsMessages
@@ -10036,6 +10083,13 @@ components:
           items: {type: integer}
         channel_id: {type: integer}
         enabled: {type: boolean}
+    NotificationChannelAccountsUpdateRequest:
+      type: object
+      required: [account_ids]
+      properties:
+        account_ids:
+          type: array
+          items: {type: string}
     NotificationBinding:
       type: object
       required: [id, channel_id, channel_name, enabled]

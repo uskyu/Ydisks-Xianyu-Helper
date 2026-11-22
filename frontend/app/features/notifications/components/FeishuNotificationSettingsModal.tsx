@@ -1,6 +1,7 @@
 import { AlertCircle,Check,Loader2,RefreshCw,Settings2,X } from 'lucide-react';
 import React from 'react';
 import { createPortal } from 'react-dom';
+import type { NotificationAccountOption } from '../models';
 import { FeishuSwitchRow } from './FeishuSwitchRow';
 
 /** FeishuNotificationSettingsModalProps 描述飞书渠道分类设置弹窗的展示状态和用户动作。 */
@@ -21,6 +22,18 @@ export interface FeishuNotificationSettingsModalProps {
   error: string;
   /** loadFailed 表示读取失败，弹窗应展示重试而不是默认草稿。 */
   loadFailed: boolean;
+  /** accountOptions 是当前用户可供绑定到该渠道的账号选项。 */
+  accountOptions: NotificationAccountOption[];
+  /** selectedAccountIDs 是当前渠道已勾选绑定的账号标识草稿。 */
+  selectedAccountIDs: string[];
+  /** accountsStatus 是账号列表与当前渠道绑定的加载状态。 */
+  accountsStatus: 'loading' | 'ready' | 'error';
+  /** accountsError 是账号列表或绑定读取失败说明。 */
+  accountsError: string;
+  /** onToggleAccount 切换一个账号的渠道绑定草稿。 */
+  onToggleAccount: (accountID: string) => void;
+  /** onRetryAccounts 重新读取账号列表和当前渠道绑定。 */
+  onRetryAccounts: () => void | Promise<void>;
   /** onWarningChange 更新警告类通知草稿。 */
   onWarningChange: (value: boolean) => void;
   /** onInfoChange 更新普通提示类通知草稿。 */
@@ -34,11 +47,13 @@ export interface FeishuNotificationSettingsModalProps {
 }
 
 /** FeishuNotificationSettingsModal 通过 Portal 展示飞书渠道的警告类与普通提示类推送开关。 */
-export const FeishuNotificationSettingsModal: React.FC<FeishuNotificationSettingsModalProps> = ({ open, channelName, loading, saving, warning, info, error, loadFailed, onWarningChange, onInfoChange, onSave, onRetry, onClose }) => {
+export const FeishuNotificationSettingsModal: React.FC<FeishuNotificationSettingsModalProps> = ({ open, channelName, loading, saving, warning, info, error, loadFailed, accountOptions, selectedAccountIDs, accountsStatus, accountsError, onToggleAccount, onRetryAccounts, onWarningChange, onInfoChange, onSave, onRetry, onClose }) => {
   // handleSave 触发保存动作，不等待异步结果以保持按钮状态由 Hook 驱动。
   const handleSave = () => { void onSave(); };
   // handleRetry 触发重新读取，不等待异步结果以保持重试按钮状态由 Hook 驱动。
   const handleRetry = () => { void onRetry(); };
+  // handleRetryAccounts 触发账号列表重新读取，不等待异步结果。
+  const handleRetryAccounts = () => { void onRetryAccounts(); };
 
   if (!open) return null;
 
@@ -73,6 +88,21 @@ export const FeishuNotificationSettingsModal: React.FC<FeishuNotificationSetting
                 <FeishuSwitchRow label="普通提示类通知" description="买家新消息、发货结果、自动化成功结果等日常提示。" checked={info} disabled={saving} onChange={onInfoChange} />
               </div>
               <p className="text-xs leading-5 text-gray-400">两个开关分别控制该飞书渠道接收的通知类别；关闭后对应类别不会推送到此渠道。</p>
+              <div className="space-y-2 border-t border-gray-100 pt-4" data-testid="feishu-account-binding">
+                <label className="block text-sm font-bold text-gray-800">绑定账号</label>
+                <p className="text-xs leading-5 text-gray-500">只有绑定的账号产生的通知才会发送到此渠道；此处修改会同步到「账号管理 → 编辑账号」的通知渠道绑定。</p>
+                {accountsStatus === 'loading' && <div className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />正在加载账号</div>}
+                {accountsStatus === 'error' && <div className="flex items-center justify-between gap-2 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700"><span>{accountsError || '账号加载失败，保存时不会改动绑定。'}</span><button type="button" className="whitespace-nowrap font-bold" onClick={handleRetryAccounts}>重试</button></div>}
+                {accountsStatus === 'ready' && accountOptions.length === 0 && <p className="text-sm text-gray-500">暂无账号，请先在账号管理中添加账号。</p>}
+                {accountsStatus === 'ready' && accountOptions.length > 0 && (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {accountOptions.map(
+                      // option 是当前可勾选的账号选项。
+                      option => <label key={option.id} className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700"><input type="checkbox" data-account={option.id} checked={selectedAccountIDs.includes(option.id)} disabled={saving} onChange={/* 切换当前账号的渠道绑定草稿。 */ () => onToggleAccount(option.id)} /><span className="truncate">{option.label}</span></label>,
+                    )}
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>

@@ -2,11 +2,14 @@
 import { act,renderHook } from '@testing-library/react';
 import { afterEach,beforeEach,describe,expect,test,vi } from 'vitest';
 import type { NotificationChannel } from './api';
-import { getFeishuChannelCategories,updateFeishuChannelCategories } from './api';
+import { getFeishuChannelCategories,getMessageNotifications,getNotificationAccountOptions,setChannelAccounts,updateFeishuChannelCategories } from './api';
 import { useFeishuChannelSettings } from './feishuChannelSettings';
 
 vi.mock('./api', /* feishuChannelSettingsApiMockFactory 提供分类设置 Hook 的确定性 API 替身。 */ () => ({
   getFeishuChannelCategories: vi.fn(),
+  getMessageNotifications: vi.fn(),
+  getNotificationAccountOptions: vi.fn(),
+  setChannelAccounts: vi.fn(),
   updateFeishuChannelCategories: vi.fn(),
 }));
 
@@ -14,6 +17,12 @@ vi.mock('./api', /* feishuChannelSettingsApiMockFactory 提供分类设置 Hook 
 const getCategoriesMock = vi.mocked(getFeishuChannelCategories);
 // updateCategoriesMock 是分类设置保存请求的可控替身。
 const updateCategoriesMock = vi.mocked(updateFeishuChannelCategories);
+// getAccountOptionsMock 是账号选项读取请求的可控替身。
+const getAccountOptionsMock = vi.mocked(getNotificationAccountOptions);
+// getMessageNotificationsMock 是当前账号渠道绑定读取请求的可控替身。
+const getMessageNotificationsMock = vi.mocked(getMessageNotifications);
+// setChannelAccountsMock 是渠道侧整体替换账号绑定的可控替身。
+const setChannelAccountsMock = vi.mocked(setChannelAccounts);
 
 // feishuChannel 是分类设置弹窗操作的飞书应用渠道摘要。
 const feishuChannel: NotificationChannel = { id: '7', name: '飞书扫码渠道', type: 'feishu_app', config: {}, enabled: true, event_types: [] };
@@ -60,8 +69,11 @@ const createDeferred = <T,>(): Deferred<T> => {
 };
 
 describe('useFeishuChannelSettings', /* 当前测试组验证分类设置的加载、保存、取消和旧响应隔离。 */ () => {
-  beforeEach(/* 当前回调重置分类设置 API 替身。 */ () => {
+  beforeEach(/* 当前回调重置分类设置 API 替身并补齐账号绑定默认响应。 */ () => {
     vi.resetAllMocks();
+    getAccountOptionsMock.mockResolvedValue([{ id: 'acc-1', label: '账号一' }, { id: 'acc-2', label: '账号二' }]);
+    getMessageNotificationsMock.mockResolvedValue({ success: true, data: [{ cookie_id: 'acc-1', channel_id: 7, channel_name: '飞书扫码渠道', enabled: true }] });
+    setChannelAccountsMock.mockResolvedValue({ success: true });
   });
 
   afterEach(/* 当前回调清理尚未完成的异步任务标记。 */ () => {
@@ -81,8 +93,13 @@ describe('useFeishuChannelSettings', /* 当前测试组验证分类设置的加�
     expect(hook.result.current.loadFailed).toBe(false);
     expect(hook.result.current.warning).toBe(false);
     expect(hook.result.current.info).toBe(true);
+    expect(hook.result.current.accountsStatus).toBe('ready');
+    expect(hook.result.current.accountOptions.map(/* option 取账号标识。 */ option => option.id)).toEqual(['acc-1', 'acc-2']);
+    expect(hook.result.current.selectedAccountIDs).toEqual(['acc-1']);
     act(/* warningAction 修改警告类通知草稿。 */ () => hook.result.current.setWarning(true));
     expect(hook.result.current.warning).toBe(true);
+    act(/* accountAction 勾选第二个账号。 */ () => hook.result.current.toggleAccount('acc-2'));
+    expect(hook.result.current.selectedAccountIDs).toEqual(['acc-1', 'acc-2']);
     hook.unmount();
   });
 
@@ -114,9 +131,25 @@ describe('useFeishuChannelSettings', /* 当前测试组验证分类设置的加�
     act(/* warningAction 把警告类通知切换到开启。 */ () => hook.result.current.setWarning(true));
     await act(/* saveAction 保存分类开关。 */ async () => { await hook.result.current.save(); });
     expect(updateCategoriesMock).toHaveBeenCalledWith('7', { warning: true, info: true }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(setChannelAccountsMock).toHaveBeenCalledWith('7', ['acc-1'], expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(hook.result.current.open).toBe(false);
     expect(hook.result.current.saving).toBe(false);
     expect(onSaved).toHaveBeenCalledWith('7');
+    hook.unmount();
+  });
+
+  test('账号列表加载失败时保存分类但不改动绑定', /* 当前回调避免用空选择误清空已有账号绑定。 */ async () => {
+    getCategoriesMock.mockResolvedValue({ warning: true, info: true });
+    getAccountOptionsMock.mockRejectedValueOnce(new Error('账号加载失败'));
+    updateCategoriesMock.mockResolvedValue({ success: true });
+    // hook 是账号选项失败场景的 Hook 渲染结果。
+    const hook = renderHook(/* accountFailureHookFactory 创建账号选项失败状态。 */ () => useFeishuChannelSettings({ onSaved: vi.fn() }));
+    await act(/* openAction 打开并读取分类设置。 */ async () => { await hook.result.current.openSettings(feishuChannel); });
+    expect(hook.result.current.accountsStatus).toBe('error');
+    await act(/* saveAction 保存分类开关。 */ async () => { await hook.result.current.save(); });
+    expect(updateCategoriesMock).toHaveBeenCalledTimes(1);
+    expect(setChannelAccountsMock).not.toHaveBeenCalled();
+    expect(hook.result.current.open).toBe(false);
     hook.unmount();
   });
 

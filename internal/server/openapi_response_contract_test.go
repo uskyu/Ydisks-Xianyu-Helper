@@ -659,6 +659,22 @@ func TestOpenAPINotificationResponses(t *testing.T) {
 	updateChannelRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(updateChannelRecorder, updateChannelRequest)
 	assertOpenAPISuccessResponse(t, updateChannelRequest, updateChannelRecorder)
+	// setChannelAccountsRequest 是渠道侧整体替换绑定账号集合的成功请求；空集合表示解绑全部账号。
+	setChannelAccountsRequest := httptest.NewRequest(http.MethodPut, "/api/v1/notifications/channels/"+channelID+"/accounts", strings.NewReader(`{"account_ids":[]}`))
+	setChannelAccountsRequest.AddCookie(sessionCookie)
+	// setChannelAccountsRecorder 捕获渠道侧账号绑定保存响应。
+	setChannelAccountsRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(setChannelAccountsRecorder, setChannelAccountsRequest)
+	assertOpenAPISuccessResponse(t, setChannelAccountsRequest, setChannelAccountsRecorder)
+	// missingAccountsRequest 是遗漏 account_ids 必填字段的失败请求。
+	missingAccountsRequest := httptest.NewRequest(http.MethodPut, "/api/v1/notifications/channels/"+channelID+"/accounts", strings.NewReader(`{}`))
+	missingAccountsRequest.AddCookie(sessionCookie)
+	// missingAccountsRecorder 捕获必填字段缺失响应。
+	missingAccountsRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(missingAccountsRecorder, missingAccountsRequest)
+	if missingAccountsRecorder.Code != http.StatusBadRequest {
+		t.Fatalf("缺少 account_ids 应返回 400: %d %s", missingAccountsRecorder.Code, missingAccountsRecorder.Body.String())
+	}
 	// deleteChannelRequest 是删除已归属通知渠道的成功请求。
 	deleteChannelRequest := httptest.NewRequest(http.MethodDelete, "/api/v1/notifications/channels/"+channelID, nil)
 	deleteChannelRequest.AddCookie(sessionCookie)
