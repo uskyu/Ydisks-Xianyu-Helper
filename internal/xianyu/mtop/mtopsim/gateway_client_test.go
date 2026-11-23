@@ -617,6 +617,10 @@ func TestTokenRetryExhaustionSendsNoTrailingRefresh(t *testing.T) {
 			_, callErr := client.SearchChatItems(ctx, cookie, "chat-1", "own", "会员", 1) // callErr 是会话商品查询的错误。
 			return callErr
 		}},
+		{"已售订单", mtopsim.APISoldOrders, func(client *mtop.ClientImpl, cookie string) error {
+			_, callErr := client.FetchSoldOrdersPage(ctx, cookie, 1, 30) // callErr 是已售订单查询的错误。
+			return callErr
+		}},
 	}
 	// testCase 是当前被验证的接口。
 	for _, testCase := range cases {
